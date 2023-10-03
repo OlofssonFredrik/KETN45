@@ -1,59 +1,61 @@
 import math
 import numpy as np
-from scipy.optimize import root
+from scipy.optimize import root, fsolve
 from H_steam import H_steam
 from hL_black_liquor import hL_black_liquor
 from BPE import BPE
 from k_black_liquor import k_black_liquor
 
-
 def known():
-
     F=2.5 # kg/s                     Feed flux
     xF=0.150   # kg dry matter/kg total   Feed dry matter content 
-    xL3=0.700 # kg dry matter/kg total   Dry matter content from last evaporator
+    xL1=0.200 # kg dry matter/kg total   Dry matter content from last evaporator
     Tf=95     # degrees C                Feed temperature
     A1=30     #m2
     A2= 45      #m2
     A3=50       #m2
-    k1=2.5      #  kW/m2/K                  Overall heat transfer coeff
-    k2=1.5    #  kW/m2/K                  Overall heat transfer coeff
-    k3=1.2   #  kW/m2/K                  Overall heat transfer coeff
+    k1=2500      #W/m2/K                Apparell  Overall heat transfer coeff
+    k2=1500    #W/m2/K               Apparell   Overall heat transfer coeff
+    k3=1200    # W/m2/K               Apparell   Overall heat transfer coeff
     Ps = 320000 #Pressure of fresh steam in Pa
 
-    return F,xF,Tf,T3,xL3,k,Ts
+    return F, xF, Tf, Ps, xL1, k1, k2, k3, A1, A2, A3
+
+def Hv(T):
+    H_v = 2496.4+2.26*T-7.34808*10**-3*T**2+3.38602*10**-5*T**3-8.40678*10**-8*T**4
+    return H_v
+    
+def hL(T):
+    h_L=4.19*T
+    return h_L
+
+def Tsat(Psat):
+    Tsat = 3816.44/(18.3036-np.log(Psat/133.32))-227.03
+    return Tsat
+ 
 
 def evaporator(X):
-    #Calculates residuals of mass and energy balances for an evaporator
-  
+    [S,V1,V2,V3,L1,L2,L3,T1,T2,T3,xL2, xL3]=X
 
-    # ================ Initialisation ========================= 
-    #
+    [F, xF, Tf, Ps, xL1, k1, k2, k3, A1, A2, A3]=known()
 
-    [S,V1,V2,V3,L1,L2,L3,T1,T2,xL1,xL2]=X
-    # 
-    [F,xF,Tf,Ps,xL3,k1,k2,k3,A1,A2,A3]=known()
+    Ts = Tsat(Ps)
 
-    # =============== Calculations start here ==================
-    #
+    Hs=Hv(Ts)
+    HV1=Hv(T1) #V1
+    HV2=Hv(T2) #V2
+    HV3=Hv(T3) #V3
+
+    hf = hL(Tf) #feed
+    hL1 = hL(T1) #L1
+    hL2 = hL(T2) #L2
+    hL3 = hL(T3) #L3
+    
+    hk1 = hL(T1) #k1
+    hk2 = hL(T2) #k2
+    hk3 = hL(T3) #k3
 
 
-    [Hs,dummy1,dummy2]=H_steam(Ts,-1) 
-    [HV1,dummy1,dummy2]=H_steam(T1,-1)
-    [HV2,dummy1,dummy2]=H_steam(T2,-1)
-    [HV3,dummy1,dummy2]=H_steam(T3,-1)
-
-
-    hf=hL_black_liquor(xF,Tf)
-    hL1=hL_black_liquor(xL1,T1)
-    hL2=hL_black_liquor(xL2,T2)
-    hL3=hL_black_liquor(xL3,T3)
-    hk1=hL_black_liquor(0,Ts)
-    hk2=hL_black_liquor(0,T1)
-    hk3=hL_black_liquor(0,T2)
-        
-
-    # ================ Calculating residuals: ==================
     
     Y=X*0
     
@@ -80,40 +82,29 @@ def evaporator(X):
     return Y
 
 
-[F,xF,Tf,T3,xL3,k,Ts]=known()
+[F, xF, Tf, Ps, xL1, k1, k2, k3, A1, A2, A3]=known()
 
-guess=np.array([7,7,7,7,7,7,7,200,90,90,0.425,0.425]) 
+# guess=np.array([7,7,7,7,7,7,7,200,90,90,0.425,0.425,0.425]) 
+guess=np.array([2.5,1,1,1,1,1,1,90,90,90,0.425,0.425]) 
 
-sol = root(evaporator, guess, method='hybr')
+#sol = root(evaporator, guess, method='hybr')
+sol = fsolve(evaporator, guess)
+print(f"sol: {sol}")
 
-if not sol.success:
-    print('Iteration not successful:',sol.message)
-else:
-    print('Iteration successful:',sol.message)
-   
-    [S,V1,V2,V3,L1,L2,L3,A,T1,T2,xL1,xL2]=sol.x[:]
-   
-    print('Steam flux',S,'kg/s' )
-    print('Vapor flux for 1',V1,'kg/s' )
-    print('Vapor flux for 2',V2,'kg/s' )
-    print('Vapor flux for 3',V3,'kg/s' )
-    print('Liquid flux for 1',L1,'kg/s' )
-    print('Liquid flux for 2',L2,'kg/s' )
-    print('Liquid flux for 3',L3,'kg/s' )
-    print('Temperature for 1',T1,'Celsius')
-    print('Temperature for 2',T2,'Celsius')
-    print('Temperature for 3',T3,'Celsius')
-    print('Molar fraction for L1',xL1,'kg/kg')
-    print('Molar fraction for L2',xL2,'kg/kg')
-    print('Molar fraction for L3',xL3,'kg/kg')
-    print('Area',A,'m2' )
-    print('S/Vtot',S/(V1+V2+V3))
-    print('Vtot/S',(V1+V2+V3)/S)
 
-    [Hs,P,dummy]=H_steam(Ts,-1)
-    [HV3,P,dummy]=H_steam(T3,-1)
-    print('Ts',Ts,'degree C')
-    print('Steam enthalpy Hs',Hs,'kJ/kg')
-    
-    with open("output.txt", "w") as f:
-      print(S,V3,L3,A,Ts,Hs,HV3, file=f)
+[S,V1,V2,V3,L1,L2,L3,T1,T2,T3,xL2, xL3]=sol
+  
+print('Steam flux', f'{S:.2f}', 'kg/s')
+print('Vapor flux for 1', f'{V1:.2f}', 'kg/s')
+print('Vapor flux for 2', f'{V2:.2f}', 'kg/s')
+print('Vapor flux for 3', f'{V3:.2f}', 'kg/s')
+print('Liquid flux for 1', f'{L1:.2f}', 'kg/s')
+print('Liquid flux for 2', f'{L2:.2f}', 'kg/s')
+print('Liquid flux for 3', f'{L3:.2f}', 'kg/s')
+print('Temperature for 1', f'{T1:.2f}', 'Celsius')
+print('Temperature for 2', f'{T2:.2f}', 'Celsius')
+print('Temperature for 3', f'{T3:.2f}', 'Celsius')
+print('Molar fraction for L2', f'{xL2:.2f}', 'kg/kg')
+print('Molar fraction for L3', f'{xL3:.2f}', 'kg/kg')
+print('S/Vtot',S/(V1+V2+V3))
+print('Vtot/S',(V1+V2+V3)/S)
